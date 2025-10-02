@@ -13,11 +13,11 @@ import java.util.List;
 public class IPv4Panel extends JPanel {
 
     // Entrada principal
-    private final JTextField ipField   = new JTextField("83.33.128.6");
+    private final JTextField ipField = new JTextField("83.33.128.6");
     private final JTextField maskField = new JTextField("255.255.255.0");
-    private final JSpinner  cidrSpinner = new JSpinner(new SpinnerNumberModel(24, 0, 32, 1));
+    private final JSpinner cidrSpinner = new JSpinner(new SpinnerNumberModel(24, 0, 32, 1));
     // Prefijo base para colorear N/S/H
-    private final JSpinner  basePrefixSpinner = new JSpinner(new SpinnerNumberModel(24, 0, 32, 1));
+    private final JSpinner basePrefixSpinner = new JSpinner(new SpinnerNumberModel(24, 0, 32, 1));
 
     // Botón calcular (lo necesitamos como field para estilizarlo)
     private final JButton calcBtn = new JButton("Calcular");
@@ -38,6 +38,9 @@ public class IPv4Panel extends JPanel {
     private final JTextArea subnetArea = new JTextArea();
     private List<IPv4Subnet> lastSubnets = new ArrayList<>();
 
+    private final DefaultListModel<String> historyModel = new DefaultListModel<>();
+    private final JList<String> historyList = new JList<>(historyModel);
+
     public IPv4Panel() {
         setLayout(new BorderLayout(12, 12));
 
@@ -52,18 +55,20 @@ public class IPv4Panel extends JPanel {
         Color bg = UIManager.getColor("nimbusLightBackground");
         if (bg != null && bg.getRed() < 80) {
             // tema oscuro
-            Color taBg = new Color(25,25,25);
-            Color taFg = new Color(230,230,230);
-            output.setBackground(taBg);  output.setForeground(taFg);
-            subnetArea.setBackground(taBg); subnetArea.setForeground(taFg);
+            Color taBg = new Color(25, 25, 25);
+            Color taFg = new Color(230, 230, 230);
+            output.setBackground(taBg);
+            output.setForeground(taFg);
+            subnetArea.setBackground(taBg);
+            subnetArea.setForeground(taFg);
             // Mejor contraste en botones
-            Color btnFg = new Color(240,240,240);
+            Color btnFg = new Color(240, 240, 240);
             calcBtn.setForeground(btnFg);
             btnSubnets.setForeground(btnFg);
             btnExport.setForeground(btnFg);
         }
 
-        JPanel middle = new JPanel(new BorderLayout(8,8));
+        JPanel middle = new JPanel(new BorderLayout(8, 8));
         JPanel visual = buildVisualPanel();
         middle.add(new JScrollPane(output), BorderLayout.CENTER);
         middle.add(visual, BorderLayout.EAST);
@@ -90,7 +95,74 @@ public class IPv4Panel extends JPanel {
 
         // Acción calcular
         calcBtn.addActionListener(e -> calcular());
+
+        // tras crear calcBtn…
+        JButton btnCopy = new JButton("Copiar");
+        JButton btnClear = new JButton("Limpiar");
+
+        // contraste en oscuro
+        Color bgg = UIManager.getColor("nimbusLightBackground");
+        if (bgg != null && bgg.getRed() < 80) {
+            var fg = new Color(240, 240, 240);
+            btnCopy.setForeground(fg);
+            btnClear.setForeground(fg);
+        }
+
+        btnCopy.setToolTipText("Copiar resultados al portapapeles (Ctrl+C)");
+        btnClear.setToolTipText("Limpiar salida (Ctrl+L)");
+
+        btnCopy.addActionListener(e -> {
+            var sel = new java.awt.datatransfer.StringSelection(output.getText());
+            java.awt.Toolkit.getDefaultToolkit().getSystemClipboard().setContents(sel, null);
+            SwingUtilities.getWindowAncestor(this)
+                    .getToolkit().beep();
+            // Si tienes StatusBar accesible, puedes avisar aquí
+        });
+
+        btnClear.addActionListener(e -> output.setText(""));
+
+        ((JPanel) getComponent(0))  // el form de arriba
+                .add(new JPanel(new FlowLayout(FlowLayout.LEFT, 8, 0)) {{
+                    add(btnCopy);
+                    add(btnClear);
+                }}, new java.awt.GridBagConstraints() {{
+                    gridx = 0;
+                    gridy = 3;
+                    gridwidth = 6;
+                    insets = new java.awt.Insets(0, 6, 6, 6);
+                    fill = java.awt.GridBagConstraints.HORIZONTAL;
+                }});
+
+// Atajos
+        registerKeyboardAction(e -> btnCopy.doClick(),
+                KeyStroke.getKeyStroke("control C"),
+                JComponent.WHEN_ANCESTOR_OF_FOCUSED_COMPONENT);
+        registerKeyboardAction(e -> btnClear.doClick(),
+                KeyStroke.getKeyStroke("control L"),
+                JComponent.WHEN_ANCESTOR_OF_FOCUSED_COMPONENT);
+
+        historyList.setVisibleRowCount(8);
+        historyList.setFixedCellWidth(220);
+        historyList.setBorder(new TitledBorder("Historial"));
+        historyList.addListSelectionListener(e -> {
+            if (!e.getValueIsAdjusting()) {
+                String s = historyList.getSelectedValue();
+                if (s != null && s.contains(" /")) {
+                    // formato guardado: "IP /CIDR   [mask]"
+                    String ip = s.substring(0, s.indexOf(" /")).trim();
+                    String after = s.substring(s.indexOf(" /") + 2).trim();
+                    String cidr = after.split("\\s+")[0];
+                    ipField.setText(ip);
+                    maskField.setText(""); // forzar a usar el spinner
+                    cidrSpinner.setValue(Integer.parseInt(cidr));
+                }
+            }
+        });
+
+
     }
+
+
 
     /* ------------ Construcción de UI ------------ */
 
@@ -100,20 +172,37 @@ public class IPv4Panel extends JPanel {
         c.insets = new Insets(6, 6, 6, 6);
         c.fill = GridBagConstraints.HORIZONTAL;
 
-        c.gridx=0; c.gridy=0; form.add(new JLabel("Dirección IP:"), c);
-        c.gridx=1; c.weightx=1; form.add(ipField, c);
+        c.gridx = 0;
+        c.gridy = 0;
+        form.add(new JLabel("Dirección IP:"), c);
+        c.gridx = 1;
+        c.weightx = 1;
+        form.add(ipField, c);
 
-        c.gridx=0; c.gridy=1; c.weightx=0; form.add(new JLabel("Máscara:"), c);
-        c.gridx=1; c.weightx=1; form.add(maskField, c);
+        c.gridx = 0;
+        c.gridy = 1;
+        c.weightx = 0;
+        form.add(new JLabel("Máscara:"), c);
+        c.gridx = 1;
+        c.weightx = 1;
+        form.add(maskField, c);
 
-        c.gridx=2; c.weightx=0; form.add(new JLabel("/bits:"), c);
-        c.gridx=3; form.add(cidrSpinner, c);
+        c.gridx = 2;
+        c.weightx = 0;
+        form.add(new JLabel("/bits:"), c);
+        c.gridx = 3;
+        form.add(cidrSpinner, c);
 
-        c.gridx=4; form.add(new JLabel("Prefijo base:"), c);
-        c.gridx=5; form.add(basePrefixSpinner, c);
+        c.gridx = 4;
+        form.add(new JLabel("Prefijo base:"), c);
+        c.gridx = 5;
+        form.add(basePrefixSpinner, c);
 
         calcBtn.setFocusable(false);
-        c.gridx=0; c.gridy=2; c.gridwidth=6; form.add(calcBtn, c);
+        c.gridx = 0;
+        c.gridy = 2;
+        c.gridwidth = 6;
+        form.add(calcBtn, c);
 
         return form;
     }
@@ -134,11 +223,14 @@ public class IPv4Panel extends JPanel {
         hexMaskLabel.setAlignmentX(Component.LEFT_ALIGNMENT);
         binHtml.setAlignmentX(Component.LEFT_ALIGNMENT);
 
-        p.add(l1); p.add(hexLabel);
+        p.add(l1);
+        p.add(hexLabel);
         p.add(Box.createVerticalStrut(4));
-        p.add(l2); p.add(hexMaskLabel);
+        p.add(l2);
+        p.add(hexMaskLabel);
         p.add(Box.createVerticalStrut(8));
-        p.add(l3); p.add(binHtml);
+        p.add(l3);
+        p.add(binHtml);
 
         return p;
     }
@@ -149,18 +241,25 @@ public class IPv4Panel extends JPanel {
         options.setBorder(new TitledBorder("Subneteo IPv4"));
 
         ButtonGroup bg = new ButtonGroup();
-        bg.add(rbByCount); bg.add(rbByHosts);
+        bg.add(rbByCount);
+        bg.add(rbByHosts);
         rbByCount.setSelected(true);
 
         GridBagConstraints c = new GridBagConstraints();
-        c.insets = new Insets(4,4,4,4);
+        c.insets = new Insets(4, 4, 4, 4);
         c.anchor = GridBagConstraints.WEST;
 
-        c.gridx=0; c.gridy=0; options.add(rbByCount, c);
-        c.gridx=1; options.add(spCount, c);
+        c.gridx = 0;
+        c.gridy = 0;
+        options.add(rbByCount, c);
+        c.gridx = 1;
+        options.add(spCount, c);
 
-        c.gridx=0; c.gridy=1; options.add(rbByHosts, c);
-        c.gridx=1; options.add(spHosts, c);
+        c.gridx = 0;
+        c.gridy = 1;
+        options.add(rbByHosts, c);
+        c.gridx = 1;
+        options.add(spHosts, c);
 
         btnSubnets.addActionListener(e -> calcularSubredes());
         btnExport.addActionListener(e -> exportCSV());
@@ -212,16 +311,18 @@ public class IPv4Panel extends JPanel {
             output.setText(sb.toString());
 
             // Vista Hex / Binario
-            int ipInt   = IPv4Utils.dottedToInt(r.inputIp());
+            int ipInt = IPv4Utils.dottedToInt(r.inputIp());
             int maskInt = IPv4Utils.dottedToInt(r.mask());
             hexLabel.setText(IPv4Utils.toHexDotted(ipInt));
             hexMaskLabel.setText(IPv4Utils.toHexDotted(maskInt));
             int base = (Integer) basePrefixSpinner.getValue();
             binHtml.setText(IPv4Utils.htmlColoredBinaryNSH(ipInt, base, r.cidr()));
 
+
         } catch (Exception ex) {
             JOptionPane.showMessageDialog(this, ex.getMessage(), "Error", JOptionPane.ERROR_MESSAGE);
         }
+
     }
 
     private void calcularSubredes() {
@@ -281,7 +382,9 @@ public class IPv4Panel extends JPanel {
         }
     }
 
-    /** Recalcula solo la vista binaria si hay datos válidos; ignora errores silenciosamente. */
+    /**
+     * Recalcula solo la vista binaria si hay datos válidos; ignora errores silenciosamente.
+     */
     private void refreshBinaryPreviewSafe() {
         try {
             String ip = ipField.getText().trim();

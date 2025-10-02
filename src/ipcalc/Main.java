@@ -2,6 +2,8 @@
 import ipv4.IPv4Panel;
 import ipv6.IPv6Panel;
 import model.HelpWindow;
+import model.IPv4MembershipPanel;
+import ui.StatusBar;
 
 import javax.swing.*;
 import java.awt.*;
@@ -44,6 +46,21 @@ public class Main {
             JTabbedPane tabs = new JTabbedPane();
             tabs.addTab("IPv4", new IPv4Panel());
             tabs.addTab("IPv6", new IPv6Panel());
+            tabs.addTab("Pertenece a subred", new IPv4MembershipPanel());
+
+            // ⬇️ Barra de estado
+            var status = new StatusBar();
+            var root = new JPanel(new BorderLayout());
+            root.add(tabs, BorderLayout.CENTER);
+            root.add(status, BorderLayout.SOUTH);
+            frame.setContentPane(root);
+
+            // Atajos globales útiles
+            frame.getRootPane().registerKeyboardAction(
+                    e -> status.info("Calculando… (Ctrl+Enter)"),
+                    KeyStroke.getKeyStroke("control ENTER"),
+                    JComponent.WHEN_IN_FOCUSED_WINDOW
+            );
 
             // Barra de menú con acceso a la guía
             JMenuBar mb = new JMenuBar();
@@ -59,8 +76,8 @@ public class Main {
 
             // Ventana de ayuda (no modal)
             HelpWindow help = new HelpWindow();
-            HelpWindow.showAtStart(help);         // se abre si el usuario lo tiene marcado
-            miGuia.addActionListener(e -> help.setVisible(true));
+            HelpWindow.showAtStart(help);
+            miGuia.addActionListener(e -> help. setVisible(true));
 
             // Atajo F1
             frame.getRootPane().registerKeyboardAction(
